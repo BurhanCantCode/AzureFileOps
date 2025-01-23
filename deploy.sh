@@ -42,52 +42,13 @@ else
   KUDU_SERVICE=true
 fi
 
+# Install Kudu Sync if not present
 if [[ ! -n "$KUDU_SYNC_CMD" ]]; then
-  # Install kudu sync
   echo Installing Kudu Sync
   npm install kudusync -g --silent
   exitWithMessageOnError "npm failed"
-
-  if [[ ! -n "$KUDU_SERVICE" ]]; then
-    # In case we are running locally, need to handle Node.js installation
-    if [ -e "$DEPLOYMENT_TARGET/package.json" ]; then
-      eval $NPM_CMD install
-      exitWithMessageOnError "npm failed"
-    fi
-  fi
-
-  KUDU_SYNC_CMD=$(npm bin)/kudusync
+  KUDU_SYNC_CMD="kudusync"
 fi
-
-# Node Helpers
-# ------------
-
-selectNodeVersion () {
-  if [[ -n "$KUDU_SELECT_NODE_VERSION_CMD" ]]; then
-    SELECT_NODE_VERSION="$KUDU_SELECT_NODE_VERSION_CMD \"$DEPLOYMENT_SOURCE\" \"$DEPLOYMENT_TARGET\" \"$DEPLOYMENT_TEMP\""
-    eval $SELECT_NODE_VERSION
-    exitWithMessageOnError "select node version failed"
-
-    if [[ -e "$DEPLOYMENT_TEMP/__nodeVersion.tmp" ]]; then
-      NODE_EXE=`cat "$DEPLOYMENT_TEMP/__nodeVersion.tmp"`
-      exitWithMessageOnError "getting node version failed"
-    fi
-    
-    if [[ -e "$DEPLOYMENT_TEMP/__npmVersion.tmp" ]]; then
-      NPM_JS_PATH=`cat "$DEPLOYMENT_TEMP/__npmVersion.tmp"`
-      exitWithMessageOnError "getting npm version failed"
-    fi
-
-    if [[ ! -n "$NODE_EXE" ]]; then
-      NODE_EXE=node
-    fi
-
-    NPM_CMD="\"$NODE_EXE\" \"$NPM_JS_PATH\""
-  else
-    NPM_CMD=npm
-    NODE_EXE=node
-  fi
-}
 
 ##################################################################################################################################
 # Deployment
@@ -95,40 +56,37 @@ selectNodeVersion () {
 
 echo Handling node.js deployment.
 
-# 1. Select node version
-selectNodeVersion
-
-# 2. Install npm packages
+# 1. Install npm packages in root
 if [ -e "$DEPLOYMENT_SOURCE/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE"
-  echo "Running npm install"
-  eval $NPM_CMD install
+  echo "Running npm install in root"
+  npm install
   exitWithMessageOnError "npm failed"
   cd - > /dev/null
 fi
 
-# 3. Install client packages and build
+# 2. Install and build client
 if [ -e "$DEPLOYMENT_SOURCE/client/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE/client"
   echo "Running npm install in client"
-  eval $NPM_CMD install
+  npm install
   exitWithMessageOnError "client npm failed"
   echo "Building client"
-  eval $NPM_CMD run build
+  npm run build
   exitWithMessageOnError "client build failed"
   cd - > /dev/null
 fi
 
-# 4. Install server packages
+# 3. Install server packages
 if [ -e "$DEPLOYMENT_SOURCE/server/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE/server"
   echo "Running npm install in server"
-  eval $NPM_CMD install
+  npm install
   exitWithMessageOnError "server npm failed"
   cd - > /dev/null
 fi
 
-# 5. KuduSync
+# 4. KuduSync
 if [[ "$IN_PLACE_DEPLOYMENT" -ne "1" ]]; then
   "$KUDU_SYNC_CMD" -v 50 -f "$DEPLOYMENT_SOURCE" -t "$DEPLOYMENT_TARGET" -n "$NEXT_MANIFEST_PATH" -p "$PREVIOUS_MANIFEST_PATH" -i ".git;.hg;.deployment;deploy.sh"
   exitWithMessageOnError "Kudu Sync failed"
