@@ -59,8 +59,8 @@ echo Handling node.js deployment.
 # 1. Install npm packages in root
 if [ -e "$DEPLOYMENT_SOURCE/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE"
-  echo "Running npm ci in root"
-  npm ci --prefer-offline --no-audit --no-fund --loglevel=error
+  echo "Running npm install in root"
+  npm install --no-audit --no-fund --loglevel=error
   exitWithMessageOnError "npm failed"
   cd - > /dev/null
 fi
@@ -68,12 +68,12 @@ fi
 # 2. Install and build client
 if [ -e "$DEPLOYMENT_SOURCE/client/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE/client"
-  echo "Running npm ci in client"
+  echo "Running npm install in client"
   # Set npm config for faster install
   npm config set fetch-retries 3
   npm config set fetch-retry-mintimeout 5000
   npm config set fetch-retry-maxtimeout 20000
-  npm ci --prefer-offline --no-audit --no-fund --loglevel=error
+  npm install --no-audit --no-fund --loglevel=error
   exitWithMessageOnError "client npm failed"
   echo "Building client"
   npm run build --if-present
@@ -84,8 +84,8 @@ fi
 # 3. Install server packages
 if [ -e "$DEPLOYMENT_SOURCE/server/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE/server"
-  echo "Running npm ci in server"
-  npm ci --prefer-offline --no-audit --no-fund --loglevel=error
+  echo "Running npm install in server"
+  npm install --no-audit --no-fund --loglevel=error
   exitWithMessageOnError "server npm failed"
   cd - > /dev/null
 fi
