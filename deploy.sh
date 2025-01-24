@@ -60,7 +60,7 @@ echo Handling node.js deployment.
 if [ -e "$DEPLOYMENT_SOURCE/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE"
   echo "Running npm install in root"
-  npm install --no-audit --no-fund --loglevel=error
+  npm install
   exitWithMessageOnError "npm failed"
   cd - > /dev/null
 fi
@@ -69,14 +69,10 @@ fi
 if [ -e "$DEPLOYMENT_SOURCE/client/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE/client"
   echo "Running npm install in client"
-  # Set npm config for faster install
-  npm config set fetch-retries 3
-  npm config set fetch-retry-mintimeout 5000
-  npm config set fetch-retry-maxtimeout 20000
-  npm install --no-audit --no-fund --loglevel=error
+  npm install
   exitWithMessageOnError "client npm failed"
   echo "Building client"
-  npm run build --if-present
+  CI=false npm run build
   exitWithMessageOnError "client build failed"
   cd - > /dev/null
 fi
@@ -85,7 +81,7 @@ fi
 if [ -e "$DEPLOYMENT_SOURCE/server/package.json" ]; then
   cd "$DEPLOYMENT_SOURCE/server"
   echo "Running npm install in server"
-  npm install --no-audit --no-fund --loglevel=error
+  npm install
   exitWithMessageOnError "server npm failed"
   cd - > /dev/null
 fi
