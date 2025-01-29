@@ -1,213 +1,136 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
+  Box,
   Paper,
   Typography,
   LinearProgress,
-  Box,
   Alert,
-  IconButton,
-  Button,
+  Stack,
 } from '@mui/material';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import CloseIcon from '@mui/icons-material/Close';
-import CancelIcon from '@mui/icons-material/Cancel';
 import { uploadFile } from '../../services/api';
-import { MAX_FILE_SIZE, formatBytes, formatTime } from '../../constants';
 
-const FileUpload = ({ onUploadSuccess, onUploadError }) => {
-  const [uploadProgress, setUploadProgress] = useState(0);
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
+const FileUpload = ({ onUploadSuccess, onUploadError, currentPath }) => {
+  const [uploadProgress, setUploadProgress] = useState({});
   const [error, setError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [currentFile, setCurrentFile] = useState(null);
-  const [uploadSpeed, setUploadSpeed] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  
-  const uploadStartTime = useRef(0);
-  const lastUploadedBytes = useRef(0);
-  const lastUpdateTime = useRef(0);
-  const abortController = useRef(null);
-
-  const calculateProgress = (loaded, total, timestamp) => {
-    const elapsedTime = (timestamp - uploadStartTime.current) / 1000; // in seconds
-    const bytesPerSecond = loaded / elapsedTime;
-    
-    // Calculate speed using a moving average
-    if (timestamp - lastUpdateTime.current >= 1000) { // Update every second
-      const instantSpeed = (loaded - lastUploadedBytes.current) / ((timestamp - lastUpdateTime.current) / 1000);
-      setUploadSpeed(instantSpeed);
-      
-      // Estimate time remaining
-      const remainingBytes = total - loaded;
-      const remainingTime = remainingBytes / instantSpeed;
-      setTimeRemaining(remainingTime);
-      
-      lastUploadedBytes.current = loaded;
-      lastUpdateTime.current = timestamp;
-    }
-    
-    return Math.round((loaded * 100) / total);
-  };
-
-  const handleCancel = () => {
-    if (abortController.current) {
-      abortController.current.abort();
-      setError('Upload cancelled');
-      setIsUploading(false);
-      setUploadProgress(0);
-      setCurrentFile(null);
-    }
-  };
-
-  const validateFile = (file) => {
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File size exceeds limit (max: ${formatBytes(MAX_FILE_SIZE)})`);
-    }
-  };
+  const [uploadingFiles, setUploadingFiles] = useState([]);
 
   const onDrop = useCallback(async (acceptedFiles) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
+    if (acceptedFiles.length === 0) return;
+
+    setIsUploading(true);
+    setError(null);
+    setUploadingFiles(acceptedFiles.map(file => ({
+      name: file.name,
+      size: file.size,
+      progress: 0,
+      status: 'pending'
+    })));
 
     try {
-      validateFile(file);
-      
-      setCurrentFile(file);
-      setIsUploading(true);
-      setError(null);
-      setUploadProgress(0);
-      setUploadSpeed(0);
-      setTimeRemaining(0);
-      
-      uploadStartTime.current = Date.now();
-      lastUpdateTime.current = Date.now();
-      lastUploadedBytes.current = 0;
-      abortController.current = new AbortController();
+      for (let i = 0; i < acceptedFiles.length; i++) {
+        const file = acceptedFiles[i];
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          if (currentPath && currentPath.trim()) {
+            formData.append('path', currentPath.trim());
+          }
 
-      const result = await uploadFile(
-        file,
-        (loaded, total) => {
-          const progress = calculateProgress(loaded, total, Date.now());
-          setUploadProgress(prev => Math.max(prev, progress));
-        },
-        abortController.current.signal
-      );
-      
-      setUploadProgress(100);
-      onUploadSuccess?.(result.data);
-    } catch (err) {
-      const message = err.name === 'AbortError' 
-        ? 'Upload cancelled'
-        : (err.message || 'Upload failed');
-      setError(message);
-      onUploadError?.(message);
+          // Use the uploadFile function from api.js instead of XMLHttpRequest
+          const response = await uploadFile(file, currentPath, (progress) => {
+            setUploadingFiles(prev => prev.map((f, index) => 
+              index === i ? { ...f, progress, status: 'uploading' } : f
+            ));
+          });
+
+          if (response?.data) {
+            setUploadingFiles(prev => prev.map((f, index) => 
+              index === i ? { ...f, progress: 100, status: 'completed' } : f
+            ));
+            onUploadSuccess(response.data);
+          }
+        } catch (err) {
+          console.error('Error uploading file:', file.name, err);
+          setError(`Failed to upload ${file.name}: ${err.message}`);
+          setUploadingFiles(prev => prev.map((f, index) => 
+            index === i ? { ...f, status: 'error' } : f
+          ));
+          onUploadError(err);
+        }
+      }
     } finally {
+      // Keep the completed status visible for a moment before clearing
       setTimeout(() => {
         setIsUploading(false);
-        setUploadProgress(0);
-        setCurrentFile(null);
-        setUploadSpeed(0);
-        setTimeRemaining(0);
-        abortController.current = null;
-      }, 1000);
+        setUploadingFiles([]);
+      }, 2000);
     }
-  }, [onUploadSuccess, onUploadError]);
+  }, [currentPath, onUploadSuccess, onUploadError]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    multiple: false,
+    multiple: true
   });
 
   return (
-    <Box sx={{ mb: 3 }}>
-      {error && (
-        <Alert
-          severity="error"
-          action={
-            <IconButton
-              aria-label="close"
-              color="inherit"
-              size="small"
-              onClick={() => setError(null)}
-            >
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          }
-          sx={{ mb: 2 }}
-        >
-          {error}
-        </Alert>
-      )}
-
-      <Paper
+    <Paper 
+      elevation={0} 
+      sx={{ 
+        mb: 3,
+        bgcolor: 'primary.light',
+        border: '2px dashed',
+        borderColor: isDragActive ? 'primary.main' : 'primary.light'
+      }}
+    >
+      <Box
         {...getRootProps()}
         sx={{
           p: 3,
           textAlign: 'center',
-          cursor: isUploading ? 'not-allowed' : 'pointer',
-          bgcolor: isDragActive ? 'action.hover' : 'background.paper',
-          border: '2px dashed',
-          borderColor: isDragActive ? 'primary.main' : 'divider',
-          opacity: isUploading ? 0.7 : 1,
-          pointerEvents: isUploading ? 'none' : 'auto',
+          cursor: 'pointer',
+          '&:hover': {
+            bgcolor: 'primary.light',
+          },
         }}
       >
-        <input {...getInputProps()} disabled={isUploading} />
-        <CloudUploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-        <Typography variant="h6" gutterBottom>
+        <input {...getInputProps()} />
+        <Typography color="primary" sx={{ mb: 1 }}>
           {isDragActive
-            ? 'Drop the file here'
-            : 'Drag & drop a file here, or click to select'}
+            ? 'Drop the files here...'
+            : 'Drag and drop files here, or click to select files'}
         </Typography>
-        <Typography variant="body2" color="textSecondary">
-          {currentFile 
-            ? `Uploading: ${currentFile.name} (${formatBytes(currentFile.size)})`
-            : `Maximum file size: ${formatBytes(MAX_FILE_SIZE)}`}
-        </Typography>
-      </Paper>
-
-      {isUploading && (
-        <Box sx={{ mt: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <LinearProgress 
-              variant="determinate" 
-              value={uploadProgress} 
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                flexGrow: 1,
-                mr: 2,
-                '& .MuiLinearProgress-bar': {
-                  borderRadius: 4,
-                },
-              }}
-            />
-            <Button
-              variant="outlined"
-              color="error"
-              size="small"
-              startIcon={<CancelIcon />}
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-          </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1 }}>
-            <Typography variant="body2" color="textSecondary">
-              {uploadProgress < 100 
-                ? `Uploading... ${uploadProgress}%`
-                : 'Finalizing upload...'}
-            </Typography>
-            {uploadSpeed > 0 && (
-              <Typography variant="body2" color="textSecondary">
-                {formatBytes(uploadSpeed)}/s
-                {timeRemaining > 0 && ` • ${formatTime(timeRemaining)} remaining`}
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      )}
-    </Box>
+        
+        {uploadingFiles.length > 0 && (
+          <Stack spacing={1} sx={{ mt: 2 }}>
+            {uploadingFiles.map((file, index) => (
+              <Box key={index} sx={{ width: '100%' }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  {file.name} - {file.status === 'completed' ? 'Completed' : 
+                    file.status === 'error' ? 'Failed' : 
+                    `${file.progress}%`}
+                </Typography>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={file.progress}
+                  color={file.status === 'error' ? 'error' : 
+                         file.status === 'completed' ? 'success' : 'primary'}
+                />
+              </Box>
+            ))}
+          </Stack>
+        )}
+        
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)} sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </Box>
+    </Paper>
   );
 };
 

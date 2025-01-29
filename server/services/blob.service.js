@@ -3,13 +3,14 @@ const { Readable } = require('stream');
 const crypto = require('crypto');
 
 class BlobService {
-  async uploadFile(file, fileName, onProgress = () => {}) {
+  async uploadFile(file, fileName, onProgress = () => {}, folderPath = '') {
     try {
-      const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+      const fullPath = folderPath ? `${folderPath}/${fileName}` : fileName;
+      const blockBlobClient = containerClient.getBlockBlobClient(fullPath);
       
       // Get actual file size from buffer if size is undefined
       const fileSize = file.size || file.buffer.length;
-      console.log(`Starting upload for ${fileName} (${(fileSize / (1024 * 1024)).toFixed(2)}MB)`);
+      console.log(`Starting upload for ${fullPath} (${(fileSize / (1024 * 1024)).toFixed(2)}MB)`);
 
       // For files larger than 100MB, use parallel chunked upload
       if (fileSize > 100 * 1024 * 1024) {
@@ -43,7 +44,7 @@ class BlobService {
 
       // Send 100% progress only after successful upload
       onProgress({ loaded: fileSize, total: fileSize, percentage: 100 });
-      console.log(`Successfully uploaded ${fileName}`);
+      console.log(`Successfully uploaded ${fullPath}`);
       return {
         url: blockBlobClient.url,
         etag: response.etag,
@@ -143,37 +144,171 @@ class BlobService {
       const blockBlobClient = containerClient.getBlockBlobClient(fileName);
       const exists = await blockBlobClient.exists();
       
+      // Check if this is a folder by listing its contents
+      const folderContents = [];
+      for await (const blob of containerClient.listBlobsFlat({ prefix: `${fileName}/` })) {
+        folderContents.push(blob.name);
+      }
+
+      if (folderContents.length > 0) {
+        // This is a folder, delete all contents first
+        for (const blobName of folderContents) {
+          const blobClient = containerClient.getBlockBlobClient(blobName);
+          await blobClient.delete();
+        }
+        // Delete the folder marker if it exists
+        const folderMarker = containerClient.getBlockBlobClient(`${fileName}/.folder`);
+        await folderMarker.delete().catch(() => {});
+        return;
+      }
+      
       if (!exists) {
         throw new Error('File not found');
       }
       
       await blockBlobClient.delete();
     } catch (error) {
+      console.error('Delete operation failed:', error);
       throw new Error(`Failed to delete file: ${error.message}`);
     }
   }
 
-  async listFiles(prefix = '', maxResults = 100) {
-    const files = [];
+  async createFolder(folderPath) {
     try {
+      // Azure Blob Storage doesn't have actual folders, so we create an empty blob with a special name
+      const folderMarker = `${folderPath}/.folder`;
+      const blockBlobClient = containerClient.getBlockBlobClient(folderMarker);
+      await blockBlobClient.upload('', 0);
+      return { success: true, path: folderPath };
+    } catch (error) {
+      throw new Error(`Failed to create folder: ${error.message}`);
+    }
+  }
+
+  async listFiles(prefix = '') {
+    const files = new Map();
+    const folders = new Set();
+    
+    try {
+      console.log('Listing files with prefix:', prefix);
+      
+      // Normalize the prefix to not have leading/trailing slashes for Azure
+      const normalizedPrefix = prefix.split('/').filter(Boolean).join('/');
       const options = {
-        prefix: prefix,
-        maxPageSize: maxResults
+        prefix: normalizedPrefix ? `${normalizedPrefix}/` : '',
       };
 
+      console.log('Using options:', options);
+
+      // First pass: collect all blobs to identify folders and files
+      const allBlobs = new Set();
       for await (const blob of containerClient.listBlobsFlat(options)) {
-        const metadata = await this.getBlobMetadata(blob.name);
-        files.push({
-          name: blob.name,
-          url: `${containerClient.url}/${blob.name}`,
-          contentType: blob.properties.contentType,
-          size: blob.properties.contentLength,
-          lastModified: blob.properties.lastModified,
-          metadata: metadata
-        });
+        allBlobs.add(blob.name);
       }
-      return files;
+
+      // Second pass: process folder markers first
+      const folderMarkers = new Map();
+      for (const blobName of allBlobs) {
+        if (blobName.endsWith('/.folder')) {
+          const folderPath = blobName.slice(0, -7); // remove /.folder
+          const folderName = folderPath.split('/').pop();
+          console.log('Found folder marker:', { folderPath, folderName });
+          
+          // Add folder entry
+          const folderEntry = {
+            name: folderName,
+            originalName: folderName,
+            type: 'folder',
+            isDir: true,
+            path: folderPath,
+            lastModified: new Date(),
+            size: 0,
+            contentType: 'application/x-directory'
+          };
+          
+          folderMarkers.set(folderPath, {
+            entry: folderEntry
+          });
+        }
+      }
+
+      // Third pass: process remaining blobs
+      for (const blobName of allBlobs) {
+        // Skip folder markers and already processed folders
+        if (blobName.endsWith('/.folder')) continue;
+        if (folderMarkers.has(blobName)) continue;
+
+        const relativePath = options.prefix 
+          ? blobName.slice(options.prefix.length) 
+          : blobName;
+        
+        if (!relativePath || relativePath === normalizedPrefix) continue;
+
+        const parts = relativePath.split('/');
+
+        if (parts.length > 1) {
+          // This is a file in a subfolder
+          const folderName = parts[0];
+          const fullFolderPath = normalizedPrefix 
+            ? `${normalizedPrefix}/${folderName}` 
+            : folderName;
+          
+          if (folderName && !folderMarkers.has(fullFolderPath)) {
+            console.log('Adding implicit folder:', { folderName, fullFolderPath });
+            folderMarkers.set(fullFolderPath, {
+              entry: {
+                name: folderName,
+                originalName: folderName,
+                type: 'folder',
+                isDir: true,
+                path: fullFolderPath,
+                lastModified: new Date(),
+                size: 0,
+                contentType: 'application/x-directory'
+              }
+            });
+          }
+        } else if (parts.length === 1 && parts[0]) {
+          // This is a file in the current directory
+          console.log('Processing file:', blobName);
+          const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+          const properties = await blockBlobClient.getProperties();
+          
+          const fileEntry = {
+            name: parts[0],
+            originalName: properties.metadata.originalName || parts[0],
+            url: `${containerClient.url}/${encodeURIComponent(blobName)}`,
+            contentType: properties.contentType,
+            size: properties.contentLength,
+            lastModified: properties.lastModified,
+            type: 'file',
+            isDir: false,
+            path: blobName
+          };
+          
+          files.set(blobName, fileEntry);
+        }
+      }
+
+      // Convert results to array
+      const results = [];
+
+      // Add folders first
+      for (const [folderPath, folderData] of folderMarkers) {
+        console.log('Adding folder to results:', folderPath);
+        results.push(folderData.entry);
+      }
+
+      // Add files
+      for (const file of files.values()) {
+        console.log('Adding file to results:', file);
+        results.push(file);
+      }
+
+      console.log('Final results:', results);
+      return results;
     } catch (error) {
+      console.error('Error listing files:', error);
       throw new Error(`Failed to list files: ${error.message}`);
     }
   }
