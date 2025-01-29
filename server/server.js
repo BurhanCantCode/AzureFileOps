@@ -64,6 +64,14 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/node-version', (req, res) => {
+  res.status(200).json({
+    nodeVersion: process.version,
+    npmVersion: process.env.npm_version,
+    engine: process.versions
+  });
+});
+
 console.log('Starting server with environment:', process.env.NODE_ENV);
 console.log('Storage container:', process.env.AZURE_STORAGE_CONTAINER_NAME);
 console.log('Server listening on port:', process.env.PORT);

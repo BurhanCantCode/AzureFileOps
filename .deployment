@@ -2,4 +2,5 @@
 command = bash deploy.sh
 # Trigger new deployment 
 SCM_DO_BUILD_DURING_DEPLOYMENT=true
-POST_BUILD_COMMAND="npm install -g pm2 && ./deploy.sh" 
+POST_BUILD_COMMAND="npm install -g pm2 && npm install --production && pm2-runtime start server/server.js"
+WEBSITE_NODE_DEFAULT_VERSION=~18 

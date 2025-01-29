@@ -96,7 +96,9 @@ fi
 echo "Finished successfully."
 
 # Install dependencies
+cd server
 npm install --production
+cd ..
 
 # Start the server with PM2
 pm2-runtime start server/server.js --name server 
