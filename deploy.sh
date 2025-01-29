@@ -101,4 +101,21 @@ npm install --production
 cd ..
 
 # Start the server with PM2
-pm2-runtime start server/server.js --name server 
+pm2-runtime start server/server.js --name server
+
+# Exit immediately if a command exits with non-zero status
+set -e
+
+# Navigate to client directory and build
+cd client
+npm install
+npm run build
+
+# Return to root and copy build files
+cd ..
+mkdir -p server/public
+cp -r client/build/* server/public/
+
+# Navigate to server directory
+cd server
+npm install --production 
