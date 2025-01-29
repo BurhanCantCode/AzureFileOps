@@ -1,3 +1,5 @@
 [config]
 command = bash deploy.sh
 # Trigger new deployment 
+SCM_DO_BUILD_DURING_DEPLOYMENT=true
+POST_BUILD_COMMAND="npm install -g pm2 && ./deploy.sh" 

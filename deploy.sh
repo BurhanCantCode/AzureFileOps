@@ -93,4 +93,10 @@ if [[ "$IN_PLACE_DEPLOYMENT" -ne "1" ]]; then
 fi
 
 ##################################################################################################################################
-echo "Finished successfully." 
+echo "Finished successfully."
+
+# Install dependencies
+npm install --production
+
+# Start the server with PM2
+pm2-runtime start server/server.js --name server 
