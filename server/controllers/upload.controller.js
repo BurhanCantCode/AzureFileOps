@@ -97,16 +97,12 @@ async function isDirectory(path) {
 }
 
 const listFiles = async (req, res) => {
+  const cacheKey = `files:${req.query.path || 'root'}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json(cached);
+  
   try {
     const path = req.query.path || '';
-    const cacheKey = `files:${path}`;
-    
-    // Check cache first
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      return res.status(200).json({ data: cachedData, fromCache: true });
-    }
-    
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
     
