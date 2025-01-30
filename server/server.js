@@ -38,17 +38,27 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add this near the top after middleware setup
+app.use((req, res, next) => {
+  console.log('Request path:', req.path);
+  console.log('Request method:', req.method);
+  next();
+});
+
 // API Routes
 app.use('/api/upload', uploadRoutes);
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  // Serve static files from React build
-  app.use(express.static(path.join(__dirname, '../client/build')));
+  console.log('Serving static files from:', path.join(__dirname, 'public'));
+  
+  // Serve static files from server/public directory
+  app.use(express.static(path.join(__dirname, 'public')));
 
   // Handle React routing, return all requests to React app
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+    console.log('Serving index.html for path:', req.path);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
 }
 

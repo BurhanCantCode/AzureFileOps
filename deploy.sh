@@ -82,6 +82,7 @@ npm install node-cache --save
 exitWithMessageOnError "node-cache install failed"
 
 # 4. Copy client build to server
+echo "Copying client build to server/public..."
 mkdir -p "$DEPLOYMENT_SOURCE/server/public"
 cp -r "$DEPLOYMENT_SOURCE/client/build/"* "$DEPLOYMENT_SOURCE/server/public/"
 
