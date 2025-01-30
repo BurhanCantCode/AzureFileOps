@@ -218,6 +218,17 @@ const deleteFile = async (req, res) => {
     } else {
       await blockBlobClient.delete();
     }
+
+    // Clear the cache for the parent directory
+    const parentPath = blobName.split('/').slice(0, -1).join('/');
+    const cacheKey = `files:${parentPath || 'root'}`;
+    cache.del(cacheKey);
+    
+    // Also clear cache for the current directory if it's a folder
+    if (isDirectory) {
+      const currentDirCacheKey = `files:${blobName}`;
+      cache.del(currentDirCacheKey);
+    }
     
     res.status(200).json({ message: 'Item deleted successfully' });
   } catch (error) {
