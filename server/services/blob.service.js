@@ -189,8 +189,8 @@ class BlobService {
     try {
       console.log('Listing files with prefix:', prefix);
       
-      // Normalize the prefix to handle root directory case
-      prefix = prefix === '/' ? '' : prefix;
+      // Normalize the prefix - remove leading/trailing slashes
+      prefix = prefix.replace(/^\/+|\/+$/g, '');
       
       const files = new Map();
       const folderMarkers = new Map();
@@ -204,13 +204,12 @@ class BlobService {
         const blobName = blob.name;
         console.log('Processing blob:', blobName);
 
-        // Skip the current prefix itself
+        // Skip if this is the prefix itself
         if (blobName === prefix) continue;
 
-        // Skip .folder_marker files when listing contents
-        if (blobName.endsWith('/.folder_marker')) continue;
-
-        const parts = blobName.slice(prefix.length).split('/').filter(Boolean);
+        // Get the relative path by removing the prefix
+        const relativePath = prefix ? blobName.slice(prefix.length + 1) : blobName;
+        const parts = relativePath.split('/').filter(Boolean);
         
         if (parts.length === 0) continue;
 
@@ -222,15 +221,13 @@ class BlobService {
           if (!folderMarkers.has(folderPath)) {
             console.log('Adding folder:', folderPath);
             folderMarkers.set(folderPath, {
-              entry: {
-                name: folderName,
-                path: folderPath,
-                type: 'folder',
-                isDir: true
-              }
+              name: folderName,
+              path: folderPath,
+              type: 'folder',
+              isDir: true
             });
           }
-        } else if (parts.length === 1) {
+        } else {
           // This is a file
           const blockBlobClient = containerClient.getBlockBlobClient(blobName);
           const properties = await blockBlobClient.getProperties();
@@ -253,7 +250,7 @@ class BlobService {
 
       // Convert results to array
       const results = [
-        ...Array.from(folderMarkers.values()).map(f => f.entry),
+        ...Array.from(folderMarkers.values()),
         ...Array.from(files.values())
       ];
 
