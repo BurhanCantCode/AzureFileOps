@@ -189,8 +189,8 @@ class BlobService {
     try {
       console.log('Listing files with prefix:', prefix);
       
-      // Normalize the prefix - remove leading/trailing slashes
-      prefix = prefix.replace(/^\/+|\/+$/g, '');
+      // Normalize the prefix to handle root directory case
+      prefix = prefix === '/' ? '' : prefix;
       
       const files = new Map();
       const folderMarkers = new Map();
@@ -204,48 +204,33 @@ class BlobService {
         const blobName = blob.name;
         console.log('Processing blob:', blobName);
 
-        // Skip if this is the prefix itself
+        // Skip the current prefix itself
         if (blobName === prefix) continue;
 
-        // Check if this is a directory marker
-        if (blobName.endsWith('/.folder_marker')) {
-          const folderPath = blobName.replace('/.folder_marker', '');
-          if (!folderMarkers.has(folderPath)) {
-            console.log('Adding folder from marker:', folderPath);
-            folderMarkers.set(folderPath, {
-              name: folderPath.split('/').pop(),
-              path: folderPath,
-              type: 'folder',
-              isDir: true
-            });
-          }
-          continue;
-        }
+        // Skip .folder_marker files when listing contents
+        if (blobName.endsWith('/.folder_marker')) continue;
 
-        // Get the relative path by removing the prefix
-        const relativePath = prefix ? blobName.slice(prefix.length + 1) : blobName;
-        const parts = relativePath.split('/').filter(Boolean);
+        const parts = blobName.slice(prefix.length).split('/').filter(Boolean);
         
         if (parts.length === 0) continue;
 
-        // Check if this is a directory
         if (parts.length > 1 || blobName.endsWith('/')) {
+          // This is a folder
           const folderName = parts[0];
           const folderPath = prefix ? `${prefix}/${folderName}` : folderName;
           
           if (!folderMarkers.has(folderPath)) {
-            console.log('Adding folder from path:', folderPath);
+            console.log('Adding folder:', folderPath);
             folderMarkers.set(folderPath, {
-              name: folderName,
-              path: folderPath,
-              type: 'folder',
-              isDir: true
+              entry: {
+                name: folderName,
+                path: folderPath,
+                type: 'folder',
+                isDir: true
+              }
             });
           }
-          
-          // Skip directory marker blobs
-          if (parts.length === 1 && blobName.endsWith('/')) continue;
-        } else {
+        } else if (parts.length === 1) {
           // This is a file
           const blockBlobClient = containerClient.getBlockBlobClient(blobName);
           const properties = await blockBlobClient.getProperties();
@@ -262,20 +247,17 @@ class BlobService {
             path: blobName
           };
           
-          // Only add if not a directory marker
-          if (!folderMarkers.has(blobName)) {
-            files.set(blobName, fileEntry);
-          }
+          files.set(blobName, fileEntry);
         }
       }
 
       // Convert results to array
       const results = [
-        ...Array.from(folderMarkers.values()),
+        ...Array.from(folderMarkers.values()).map(f => f.entry),
         ...Array.from(files.values())
       ];
 
-      console.log('Final listing results:', results);
+      console.log('Listing results:', results);
       return results;
 
     } catch (error) {
