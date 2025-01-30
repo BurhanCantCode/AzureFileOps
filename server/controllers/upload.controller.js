@@ -103,88 +103,11 @@ const listFiles = async (req, res) => {
   
   try {
     const path = req.query.path || '';
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.pageSize) || 50;
+    console.log('Listing files for path:', path);
+
+    const items = await blobService.listFiles(path);
     
-    const items = [];
-    const seen = new Set();
-    const prefix = path ? `${path}/` : '';
-    
-    // Get paginated blobs
-    const iterator = containerClient.listBlobsFlat({ prefix }).byPage({
-      maxPageSize: pageSize,
-      continuationToken: req.query.continuationToken
-    });
-    
-    const pageResult = await iterator.next();
-    const blobs = pageResult.value.segment.blobItems;
-    
-    // Process blobs (existing logic)
-    for (const blob of blobs) {
-      const fullPath = blob.name;
-      
-      // Only skip hidden files that aren't folder markers
-      const fileName = fullPath.split('/').pop();
-      if (fileName.startsWith('.') && !fullPath.endsWith('/.folder_marker')) {
-        continue;
-      }
-
-      // Get relative path within current directory
-      const relativePath = fullPath.slice(prefix.length);
-      const parts = relativePath.split('/').filter(p => p);
-      
-      // Handle root items and first-level children
-      const [name] = parts;
-      if (!name) continue;
-
-      const itemPath = path ? `${path}/${name}` : name;
-      if (seen.has(itemPath)) continue;
-
-      // SPECIAL CASE: Handle empty folders with only a marker
-      if (fullPath.endsWith('/.folder_marker')) {
-        const folderPath = fullPath.slice(0, -14); // remove "/.folder_marker"
-        const folderName = folderPath.split('/').pop();
-        
-        items.push({
-          name: folderName,
-          path: folderPath,
-          isDirectory: true,
-          type: 'folder',
-          size: null,
-          lastModified: null
-        });
-        
-        seen.add(folderPath);
-        continue;
-      }
-
-      // FIX: Only mark as directory if it's actually a directory
-      const isDir = await isDirectory(itemPath);
-      if (isDir && !blob.properties.contentLength) {
-        items.push({
-          name,
-          path: itemPath,
-          isDirectory: true,
-          type: 'folder',
-          size: null,
-          lastModified: null
-        });
-      } else {
-        items.push({
-          name,
-          path: itemPath,
-          isDirectory: false,
-          type: blob.properties.contentType || 'application/octet-stream',
-          size: blob.properties.contentLength,
-          lastModified: blob.properties.lastModified
-        });
-      }
-
-      seen.add(itemPath);
-    }
-
-    // Cache the result
-    cache.set(cacheKey, items);
+    // Always wrap response in data property for consistency
     res.status(200).json({ data: items });
   } catch (error) {
     console.error('List error:', error);
