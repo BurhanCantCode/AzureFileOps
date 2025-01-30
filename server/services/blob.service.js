@@ -192,13 +192,20 @@ class BlobService {
     try {
       console.log('Listing files with prefix:', prefix);
       
-      // Special handling for root path
-      const normalizedPrefix = prefix === '/' ? '' : prefix.split('/').filter(Boolean).join('/');
+      // Normalize root path handling
+      const normalizedPrefix = prefix === '/' || prefix === '' 
+        ? '' 
+        : prefix.split('/').filter(Boolean).join('/');
+        
       const options = {
         prefix: normalizedPrefix ? `${normalizedPrefix}/` : '',
       };
 
-      console.log('Using options:', options);
+      console.log('Using normalized options:', { 
+        originalPrefix: prefix,
+        normalizedPrefix,
+        optionsPrefix: options.prefix 
+      });
 
       // First pass: collect all blobs
       const allBlobs = new Set();
