@@ -86,11 +86,8 @@ if (!process.env.AZURE_STORAGE_CONTAINER_NAME) {
   process.exit(1);
 }
 
-const server = https.createServer({
-  allowHTTP1: true,
-  http2: true
-}, app).listen(PORT, () => {
-  console.log(`HTTP/2 server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
 });
 
 // Add this after server starts
