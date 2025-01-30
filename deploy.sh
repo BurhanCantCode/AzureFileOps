@@ -91,38 +91,10 @@ if [[ "$IN_PLACE_DEPLOYMENT" -ne "1" ]]; then
   exitWithMessageOnError "Kudu Sync failed"
 fi
 
-# 6. Start server directly (remove PM2)
+# 6. Start server directly (no PM2)
 cd "$DEPLOYMENT_TARGET/server"
 echo "Starting server..."
 node server.js
 
 ##################################################################################################################################
-echo "Finished successfully."
-
-# Install dependencies
-cd server
-npm install --production
-cd ..
-
-# Start the server with PM2
-cd server
-npm install pm2 -g
-pm2 delete all || true  # Stop any existing processes
-NODE_ENV=production pm2 start server.js --name server --no-daemon
-
-# Exit immediately if a command exits with non-zero status
-set -e
-
-# Navigate to client directory and build
-cd client
-npm install
-npm run build
-
-# Return to root and copy build files
-cd ..
-mkdir -p server/public
-cp -r client/build/* server/public/
-
-# Navigate to server directory
-cd server
-npm install --production 
+echo "Finished successfully." 

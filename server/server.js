@@ -109,4 +109,14 @@ const server = app.listen(PORT, () => {
 // Add this after server starts
 server.on('listening', () => {
   const addr = server.address();
-  console.log(`
+  console.log(`Server listening on ${addr.address}:${addr.port}`);
+});
+
+// Add back the SIGINT handler
+process.on('SIGINT', () => {
+  console.log('Received SIGINT. Shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+});
