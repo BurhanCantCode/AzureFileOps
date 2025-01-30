@@ -54,43 +54,43 @@ fi
 # Deployment
 # ----------
 
-echo Handling node.js deployment.
+echo "Handling node.js deployment."
 
-# 1. Install npm packages in root
-if [ -e "$DEPLOYMENT_SOURCE/package.json" ]; then
-  cd "$DEPLOYMENT_SOURCE"
-  echo "Running npm install in root"
-  npm install
-  exitWithMessageOnError "npm failed"
-  cd - > /dev/null
-fi
+# 1. Install dependencies
+cd "$DEPLOYMENT_SOURCE"
+echo "Installing root dependencies..."
+npm install
+exitWithMessageOnError "Root npm install failed"
 
-# 2. Install and build client
-if [ -e "$DEPLOYMENT_SOURCE/client/package.json" ]; then
-  cd "$DEPLOYMENT_SOURCE/client"
-  echo "Running npm install in client"
-  npm install
-  exitWithMessageOnError "client npm failed"
-  echo "Building client"
-  CI=false npm run build
-  exitWithMessageOnError "client build failed"
-  cd - > /dev/null
-fi
+# 2. Build client
+cd "$DEPLOYMENT_SOURCE/client"
+echo "Installing client dependencies..."
+npm install
+exitWithMessageOnError "Client npm install failed"
+echo "Building client..."
+CI=false npm run build
+exitWithMessageOnError "Client build failed"
 
-# 3. Install server packages
-if [ -e "$DEPLOYMENT_SOURCE/server/package.json" ]; then
-  cd "$DEPLOYMENT_SOURCE/server"
-  echo "Running npm install in server"
-  npm install
-  exitWithMessageOnError "server npm failed"
-  cd - > /dev/null
-fi
+# 3. Install server dependencies
+cd "$DEPLOYMENT_SOURCE/server"
+echo "Installing server dependencies..."
+npm install --production
+exitWithMessageOnError "Server npm install failed"
 
-# 4. KuduSync
+# 4. Copy client build to server
+mkdir -p "$DEPLOYMENT_SOURCE/server/public"
+cp -r "$DEPLOYMENT_SOURCE/client/build/"* "$DEPLOYMENT_SOURCE/server/public/"
+
+# 5. KuduSync
 if [[ "$IN_PLACE_DEPLOYMENT" -ne "1" ]]; then
   "$KUDU_SYNC_CMD" -v 50 -f "$DEPLOYMENT_SOURCE" -t "$DEPLOYMENT_TARGET" -n "$NEXT_MANIFEST_PATH" -p "$PREVIOUS_MANIFEST_PATH" -i ".git;.hg;.deployment;deploy.sh"
   exitWithMessageOnError "Kudu Sync failed"
 fi
+
+# 6. Start server directly (remove PM2)
+cd "$DEPLOYMENT_TARGET/server"
+echo "Starting server..."
+node server.js
 
 ##################################################################################################################################
 echo "Finished successfully."
@@ -101,7 +101,10 @@ npm install --production
 cd ..
 
 # Start the server with PM2
-pm2-runtime start server/server.js --name server
+cd server
+npm install pm2 -g
+pm2 delete all || true  # Stop any existing processes
+NODE_ENV=production pm2 start server.js --name server --no-daemon
 
 # Exit immediately if a command exits with non-zero status
 set -e
