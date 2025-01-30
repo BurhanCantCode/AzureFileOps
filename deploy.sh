@@ -74,8 +74,12 @@ exitWithMessageOnError "Client build failed"
 # 3. Install server dependencies
 cd "$DEPLOYMENT_SOURCE/server"
 echo "Installing server dependencies..."
-npm install --production
+npm install --production --force
 exitWithMessageOnError "Server npm install failed"
+
+# Add node-cache explicitly
+npm install node-cache --save
+exitWithMessageOnError "node-cache install failed"
 
 # 4. Copy client build to server
 mkdir -p "$DEPLOYMENT_SOURCE/server/public"

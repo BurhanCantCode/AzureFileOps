@@ -86,26 +86,27 @@ if (!process.env.AZURE_STORAGE_CONTAINER_NAME) {
   process.exit(1);
 }
 
+try {
+  require('node-cache');
+} catch (err) {
+  console.error('Failed to load node-cache:', err);
+  process.exit(1);
+}
+
 const startupTimeout = setTimeout(() => {
   console.error('Server startup timeout after 180s');
   process.exit(1);
 }, 180000);
 
 const server = app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
+  // Clear startup timeout since server started successfully
+  if (startupTimeout) {
+    clearTimeout(startupTimeout);
+  }
 });
 
 // Add this after server starts
 server.on('listening', () => {
-  clearTimeout(startupTimeout);
   const addr = server.address();
-  console.log(`Server listening on ${addr.address}:${addr.port}`);
-});
-
-process.on('SIGINT', () => {
-  console.log('Received SIGINT. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Server closed.');
-    process.exit(0);
-  });
-}); 
+  console.log(`
