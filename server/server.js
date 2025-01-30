@@ -98,23 +98,29 @@ const startupTimeout = setTimeout(() => {
   process.exit(1);
 }, 180000);
 
-const server = app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  // Clear startup timeout since server started successfully
-  if (startupTimeout) {
-    clearTimeout(startupTimeout);
-  }
-});
+const server = app.listen(PORT)
+  .on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${PORT} is busy, trying ${PORT + 1}`);
+      // Try next port
+      server.listen(PORT + 1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  })
+  .on('listening', () => {
+    const addr = server.address();
+    console.log(`Server listening on ${addr.address}:${addr.port}`);
+    // Clear startup timeout since server started successfully
+    if (startupTimeout) {
+      clearTimeout(startupTimeout);
+    }
+  });
 
-// Add this after server starts
-server.on('listening', () => {
-  const addr = server.address();
-  console.log(`Server listening on ${addr.address}:${addr.port}`);
-});
-
-// Add back the SIGINT handler
-process.on('SIGINT', () => {
-  console.log('Received SIGINT. Shutting down gracefully...');
+// Add graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
   server.close(() => {
     console.log('Server closed.');
     process.exit(0);
