@@ -103,15 +103,16 @@ const listFiles = async (req, res) => {
 
     const items = await blobService.listFiles(path);
     
-    // Always wrap response in data property for consistency
-    res.status(200).json({ data: items });
+    // Always wrap response in data property
+    const response = { data: items };
+    console.log('Sending response:', response);
+    
+    res.status(200).json(response);
   } catch (error) {
     console.error('List files error:', error);
-    // Send more detailed error message
     res.status(500).json({ 
       message: 'Failed to list files',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-      path: req.query.path 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
     });
   }
 };

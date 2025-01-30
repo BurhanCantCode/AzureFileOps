@@ -186,6 +186,8 @@ class BlobService {
   }
 
   async listFiles(prefix = '') {
+    const files = new Map();
+    
     try {
       console.log('Listing files with prefix:', prefix);
       
@@ -297,7 +299,9 @@ class BlobService {
       const result = [...folderMarkers.values()].map(f => f.entry)
         .concat([...files.values()]);
 
+      console.log('Returning files:', result);
       return result;
+
     } catch (error) {
       console.error('Blob service list operation failed:', error);
       throw error; // Re-throw to be handled by controller

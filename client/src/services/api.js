@@ -41,7 +41,12 @@ export const listFiles = async (path = '') => {
     const response = await api.get('/', {
       params: { path }
     });
-    return response.data;
+    
+    // Handle both response formats
+    const data = response.data.data || response.data;
+    console.log('Processed response:', data);
+    
+    return { data };  // Always return in consistent format
   } catch (error) {
     console.error('List files error:', error);
     throw new Error(error.response?.data?.message || 'Failed to list files');
