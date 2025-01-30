@@ -207,19 +207,34 @@ class BlobService {
         // Skip if this is the prefix itself
         if (blobName === prefix) continue;
 
+        // Check if this is a directory marker
+        if (blobName.endsWith('/.folder_marker')) {
+          const folderPath = blobName.replace('/.folder_marker', '');
+          if (!folderMarkers.has(folderPath)) {
+            console.log('Adding folder from marker:', folderPath);
+            folderMarkers.set(folderPath, {
+              name: folderPath.split('/').pop(),
+              path: folderPath,
+              type: 'folder',
+              isDir: true
+            });
+          }
+          continue;
+        }
+
         // Get the relative path by removing the prefix
         const relativePath = prefix ? blobName.slice(prefix.length + 1) : blobName;
         const parts = relativePath.split('/').filter(Boolean);
         
         if (parts.length === 0) continue;
 
+        // Check if this is a directory
         if (parts.length > 1 || blobName.endsWith('/')) {
-          // This is a folder
           const folderName = parts[0];
           const folderPath = prefix ? `${prefix}/${folderName}` : folderName;
           
           if (!folderMarkers.has(folderPath)) {
-            console.log('Adding folder:', folderPath);
+            console.log('Adding folder from path:', folderPath);
             folderMarkers.set(folderPath, {
               name: folderName,
               path: folderPath,
@@ -227,6 +242,9 @@ class BlobService {
               isDir: true
             });
           }
+          
+          // Skip directory marker blobs
+          if (parts.length === 1 && blobName.endsWith('/')) continue;
         } else {
           // This is a file
           const blockBlobClient = containerClient.getBlockBlobClient(blobName);
@@ -244,7 +262,10 @@ class BlobService {
             path: blobName
           };
           
-          files.set(blobName, fileEntry);
+          // Only add if not a directory marker
+          if (!folderMarkers.has(blobName)) {
+            files.set(blobName, fileEntry);
+          }
         }
       }
 
@@ -254,7 +275,7 @@ class BlobService {
         ...Array.from(files.values())
       ];
 
-      console.log('Listing results:', results);
+      console.log('Final listing results:', results);
       return results;
 
     } catch (error) {
