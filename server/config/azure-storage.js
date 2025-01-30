@@ -43,34 +43,36 @@ function createBlobServiceClient() {
 let blobServiceClient;
 let containerClient;
 
-try {
-  console.log('Initializing Azure Storage client with retry...');
-  let retryCount = 0;
-  const maxRetries = 3;
-  
-  while (retryCount < maxRetries) {
-    try {
-      blobServiceClient = createBlobServiceClient();
-      break;
-    } catch (error) {
-      retryCount++;
-      console.log(`Retry ${retryCount} of ${maxRetries}`);
-      if (retryCount === maxRetries) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+(async () => {
+  try {
+    console.log('Initializing Azure Storage client with retry...');
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        blobServiceClient = createBlobServiceClient();
+        break;
+      } catch (error) {
+        retryCount++;
+        console.log(`Retry ${retryCount} of ${maxRetries}`);
+        if (retryCount === maxRetries) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      }
     }
+    
+    const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
+    if (!containerName) {
+      throw new Error('Container name is not defined in environment variables');
+    }
+    
+    console.log('Container name:', containerName);
+    containerClient = blobServiceClient.getContainerClient(containerName);
+  } catch (error) {
+    console.error('Failed to initialize Azure Storage:', error);
+    throw error;
   }
-  
-  const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
-  if (!containerName) {
-    throw new Error('Container name is not defined in environment variables');
-  }
-  
-  console.log('Container name:', containerName);
-  containerClient = blobServiceClient.getContainerClient(containerName);
-} catch (error) {
-  console.error('Failed to initialize Azure Storage:', error);
-  throw error;
-}
+})();
 
 async function initializeContainer() {
   try {
