@@ -192,123 +192,104 @@ class BlobService {
     try {
       console.log('Listing files with prefix:', prefix);
       
-      // Normalize the prefix to not have leading/trailing slashes for Azure
-      const normalizedPrefix = prefix.split('/').filter(Boolean).join('/');
+      // Special handling for root path
+      const normalizedPrefix = prefix === '/' ? '' : prefix.split('/').filter(Boolean).join('/');
       const options = {
         prefix: normalizedPrefix ? `${normalizedPrefix}/` : '',
       };
 
       console.log('Using options:', options);
 
-      // First pass: collect all blobs to identify folders and files
+      // First pass: collect all blobs
       const allBlobs = new Set();
       for await (const blob of containerClient.listBlobsFlat(options)) {
+        // Skip empty paths or paths that exactly match the prefix
+        if (!blob.name || blob.name === normalizedPrefix) continue;
         allBlobs.add(blob.name);
       }
 
-      // Second pass: process folder markers first
+      // Second pass: process folder markers
       const folderMarkers = new Map();
       for (const blobName of allBlobs) {
         if (blobName.endsWith('/.folder')) {
           const folderPath = blobName.slice(0, -7); // remove /.folder
-          const folderName = folderPath.split('/').pop();
+          const folderName = folderPath.split('/').pop() || folderPath;
+          
+          // Don't add empty folder names
+          if (!folderName) continue;
+
           console.log('Found folder marker:', { folderPath, folderName });
           
-          // Add folder entry
-          const folderEntry = {
-            name: folderName,
-            originalName: folderName,
-            type: 'folder',
-            isDir: true,
-            path: folderPath,
-            lastModified: new Date(),
-            size: 0,
-            contentType: 'application/x-directory'
-          };
-          
           folderMarkers.set(folderPath, {
-            entry: folderEntry
+            entry: {
+              name: folderName,
+              originalName: folderName,
+              type: 'folder',
+              isDir: true,
+              path: folderPath,
+              lastModified: new Date(),
+              size: 0,
+              contentType: 'application/x-directory'
+            }
           });
         }
       }
 
-      // Third pass: process remaining blobs
+      // Third pass: process files and implicit folders
       for (const blobName of allBlobs) {
-        // Skip folder markers and already processed folders
         if (blobName.endsWith('/.folder')) continue;
-        if (folderMarkers.has(blobName)) continue;
-
+        
         const relativePath = options.prefix 
           ? blobName.slice(options.prefix.length) 
           : blobName;
         
-        if (!relativePath || relativePath === normalizedPrefix) continue;
+        if (!relativePath) continue;
 
         const parts = relativePath.split('/');
-
-        if (parts.length > 1) {
-          // This is a file in a subfolder
-          const folderName = parts[0];
-          const fullFolderPath = normalizedPrefix 
-            ? `${normalizedPrefix}/${folderName}` 
-            : folderName;
-          
-          if (folderName && !folderMarkers.has(fullFolderPath)) {
-            console.log('Adding implicit folder:', { folderName, fullFolderPath });
-            folderMarkers.set(fullFolderPath, {
-              entry: {
-                name: folderName,
-                originalName: folderName,
-                type: 'folder',
-                isDir: true,
-                path: fullFolderPath,
-                lastModified: new Date(),
-                size: 0,
-                contentType: 'application/x-directory'
-              }
+        
+        // Handle root level items
+        if (parts.length === 1 || (parts.length === 2 && parts[1] === '')) {
+          if (!files.has(blobName)) {
+            files.set(blobName, {
+              name: parts[0],
+              originalName: parts[0],
+              path: blobName,
+              type: 'file',
+              isDir: false
             });
           }
-        } else if (parts.length === 1 && parts[0]) {
-          // This is a file in the current directory
-          console.log('Processing file:', blobName);
-          const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-          const properties = await blockBlobClient.getProperties();
-          
-          const fileEntry = {
-            name: parts[0],
-            originalName: properties.metadata.originalName || parts[0],
-            url: `${containerClient.url}/${encodeURIComponent(blobName)}`,
-            contentType: properties.contentType,
-            size: properties.contentLength,
-            lastModified: properties.lastModified,
-            type: 'file',
-            isDir: false,
-            path: blobName
-          };
-          
-          files.set(blobName, fileEntry);
+          continue;
+        }
+
+        // Handle nested items
+        const folderName = parts[0];
+        const fullFolderPath = options.prefix 
+          ? `${options.prefix}/${folderName}`.replace(/\/+/g, '/')
+          : folderName;
+
+        if (folderName && !folderMarkers.has(fullFolderPath)) {
+          folderMarkers.set(fullFolderPath, {
+            entry: {
+              name: folderName,
+              originalName: folderName,
+              type: 'folder',
+              isDir: true,
+              path: fullFolderPath,
+              lastModified: new Date(),
+              size: 0,
+              contentType: 'application/x-directory'
+            }
+          });
         }
       }
 
-      // Convert results to array
-      const results = [];
+      // Combine folders and files
+      const result = [...folderMarkers.values()].map(f => f.entry)
+        .concat([...files.values()]);
 
-      // Add folders first
-      for (const [folderPath, folderData] of folderMarkers) {
-        console.log('Adding folder to results:', folderPath);
-        results.push(folderData.entry);
-      }
-
-      // Add files
-      for (const file of files.values()) {
-        console.log('Adding file to results:', file);
-        results.push(file);
-      }
-
-      console.log('Final results:', results);
-      return results;
+      return result;
     } catch (error) {
-      console.error('Error listing files:', error);
+      console.error('List operation failed:', error);
       throw new Error(`Failed to list files: ${error.message}`);
     }
   }
