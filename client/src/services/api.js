@@ -39,14 +39,22 @@ export const uploadFile = async (file, path = '', onProgress) => {
 export const listFiles = async (path = '') => {
   try {
     const response = await api.get('/', {
-      params: { path }
+      params: { path },
+      transformResponse: [
+        (data) => {
+          // Handle both wrapped and unwrapped responses
+          try {
+            const parsed = JSON.parse(data);
+            return Array.isArray(parsed) ? { data: parsed } : parsed;
+          } catch {
+            return { data: [] };
+          }
+        }
+      ]
     });
     
-    // Handle both response formats
-    const data = response.data.data || response.data;
-    console.log('Processed response:', data);
-    
-    return { data };  // Always return in consistent format
+    console.log('Processed response:', response.data);
+    return response.data;
   } catch (error) {
     console.error('List files error:', error);
     throw new Error(error.response?.data?.message || 'Failed to list files');

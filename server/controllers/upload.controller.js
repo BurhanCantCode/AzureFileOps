@@ -1,14 +1,7 @@
-const { BlobServiceClient } = require('@azure/storage-blob');
+const { containerClient } = require('../config/azure-storage');
 const { getContentType } = require('../utils/fileTypes');
 const NodeCache = require('node-cache');
-
-const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME;
-
-console.log('Initializing Azure Blob Storage with container:', containerName);
-
-const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-const containerClient = blobServiceClient.getContainerClient(containerName);
+const blobService = require('../services/blob.service');
 
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 120 });
 
@@ -17,10 +10,10 @@ const cache = new NodeCache({ stdTTL: 300, checkperiod: 120 });
   try {
     const exists = await containerClient.exists();
     if (!exists) {
-      console.error('Container does not exist:', containerName);
+      console.error('Container does not exist:', containerClient.containerName);
       return;
     }
-    console.log('Successfully connected to container:', containerName);
+    console.log('Successfully connected to container:', containerClient.containerName);
     
     // List all blobs in container
     console.log('Listing all blobs in container:');
@@ -103,10 +96,17 @@ const listFiles = async (req, res) => {
 
     const items = await blobService.listFiles(path);
     
-    // Always wrap response in data property
-    const response = { data: items };
-    console.log('Sending response:', response);
+    // Always return { data: [...] } format
+    const response = { 
+      data: items.map(item => ({
+        ...item,
+        // Ensure null values are properly serialized
+        lastModified: item.lastModified?.toISOString() || null,
+        size: item.size || null
+      }))
+    };
     
+    console.log('Sending response:', response);
     res.status(200).json(response);
   } catch (error) {
     console.error('List files error:', error);
