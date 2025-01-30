@@ -70,25 +70,21 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
         return;
       }
 
-      // Remove any leading/trailing slashes and spaces
       const sanitizedFolderName = newFolderName.trim().replace(/^\/+|\/+$/g, '');
       const sanitizedCurrentPath = currentPath?.trim().replace(/^\/+|\/+$/g, '');
       
-      // Construct the full path
       const folderPath = sanitizedCurrentPath 
         ? `${sanitizedCurrentPath}/${sanitizedFolderName}`
         : sanitizedFolderName;
 
-      console.log('Creating folder with path:', folderPath); // Debug log
+      console.log('Creating folder with path:', folderPath);
       
-      const response = await createFolder(folderPath);
-      if (response?.data && Array.isArray(response.data)) {
-        // Add the new folder to the current list
-        setFiles(prevFiles => [...prevFiles, ...response.data]);
-      }
+      await createFolder(folderPath);
       setCreateFolderOpen(false);
       setNewFolderName('');
-      await fetchFiles(); // Refresh the list to show the new folder
+      
+      // Immediately fetch files after creating folder
+      await fetchFiles();
     } catch (err) {
       console.error('Error creating folder:', err);
       setError(err.message || 'Failed to create folder');
@@ -110,21 +106,24 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
     }
   };
 
-  const handleNavigateToFolder = (folderPath) => {
+  const handleNavigateToFolder = async (folderPath) => {
     onPathChange(folderPath);
+    // Clear cache by triggering a refresh
+    await fetchFiles();
   };
 
-  const handleNavigateUp = () => {
+  const handleNavigateUp = async () => {
     if (!currentPath) return;
     
-    // Split path and remove last segment
     const pathParts = currentPath.split('/').filter(p => p);
     if (pathParts.length === 0) {
-      onPathChange(''); // Go back to root
+      onPathChange('');
     } else {
       const newPath = pathParts.slice(0, -1).join('/');
       onPathChange(newPath);
     }
+    // Clear cache by triggering a refresh
+    await fetchFiles();
   };
 
   const filteredFiles = useMemo(() => {

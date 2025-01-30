@@ -239,6 +239,11 @@ const createFolder = async (req, res) => {
       blobHTTPHeaders: { blobContentType: 'application/x-directory' }
     });
 
+    // Clear the cache for the parent directory
+    const parentPath = folderPath.split('/').slice(0, -1).join('/');
+    const cacheKey = `files:${parentPath || 'root'}`;
+    cache.del(cacheKey);
+
     res.status(200).json({
       message: 'Folder created successfully',
       data: [{
