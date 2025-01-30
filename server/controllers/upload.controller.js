@@ -97,10 +97,6 @@ async function isDirectory(path) {
 }
 
 const listFiles = async (req, res) => {
-  const cacheKey = `files:${req.query.path || 'root'}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return res.json(cached);
-  
   try {
     const path = req.query.path || '';
     console.log('Listing files for path:', path);
@@ -110,8 +106,13 @@ const listFiles = async (req, res) => {
     // Always wrap response in data property for consistency
     res.status(200).json({ data: items });
   } catch (error) {
-    console.error('List error:', error);
-    res.status(500).json({ message: 'Failed to list files' });
+    console.error('List files error:', error);
+    // Send more detailed error message
+    res.status(500).json({ 
+      message: 'Failed to list files',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      path: req.query.path 
+    });
   }
 };
 

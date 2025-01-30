@@ -186,9 +186,6 @@ class BlobService {
   }
 
   async listFiles(prefix = '') {
-    const files = new Map();
-    const folders = new Set();
-    
     try {
       console.log('Listing files with prefix:', prefix);
       
@@ -206,6 +203,12 @@ class BlobService {
         normalizedPrefix,
         optionsPrefix: options.prefix 
       });
+
+      // Validate container exists
+      const containerExists = await containerClient.exists();
+      if (!containerExists) {
+        throw new Error('Storage container not found');
+      }
 
       // First pass: collect all blobs
       const allBlobs = new Set();
@@ -296,8 +299,8 @@ class BlobService {
 
       return result;
     } catch (error) {
-      console.error('List operation failed:', error);
-      throw new Error(`Failed to list files: ${error.message}`);
+      console.error('Blob service list operation failed:', error);
+      throw error; // Re-throw to be handled by controller
     }
   }
 
