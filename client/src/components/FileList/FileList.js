@@ -94,10 +94,19 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
   const handleDelete = async (item) => {
     try {
       setIsDeleting(true);
+      console.log('Deleting item:', item);
+      
       await deleteFile(item.path);
       setDeleteConfirmOpen(false);
       setItemToDelete(null);
+      
+      // Force immediate refresh
       await fetchFiles();
+      
+      // Double-check refresh after a short delay
+      setTimeout(async () => {
+        await fetchFiles();
+      }, 1000);
     } catch (err) {
       console.error('Error deleting item:', err);
       setError(`Failed to delete ${item.isDirectory ? 'folder' : 'file'}`);

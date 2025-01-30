@@ -195,42 +195,98 @@ const listFiles = async (req, res) => {
 const deleteFile = async (req, res) => {
   try {
     const blobName = req.params.fileName;
-    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    console.log('Attempting to delete:', blobName);
+
+    // Clear all relevant caches first
+    const parentPath = blobName.split('/').slice(0, -1).join('/');
+    const parentCacheKey = `files:${parentPath || 'root'}`;
+    const currentCacheKey = `files:${blobName}`;
     
-    // Check if it's a directory by listing blobs with this prefix
+    // Clear both caches immediately
+    cache.del(parentCacheKey);
+    cache.del(currentCacheKey);
+    
+    // First check if this is a folder by looking for the marker
+    const markerClient = containerClient.getBlockBlobClient(`${blobName}/.folder_marker`);
     let isDirectory = false;
-    const dirIterator = containerClient.listBlobsFlat({
-      prefix: `${blobName}/`
-    });
     
-    for await (const _ of dirIterator) {
+    try {
+      await markerClient.getProperties();
       isDirectory = true;
-      break;
+      console.log('Found folder marker for:', blobName);
+    } catch {
+      // Check if it has any contents (fallback method)
+      const dirIterator = containerClient.listBlobsFlat({
+        prefix: `${blobName}/`
+      });
+      
+      for await (const _ of dirIterator) {
+        isDirectory = true;
+        console.log('Found directory contents for:', blobName);
+        break;
+      }
     }
     
     if (isDirectory) {
-      // Delete all blobs in the directory
+      console.log('Deleting directory:', blobName);
+      
+      // Delete the folder marker first
+      try {
+        await markerClient.delete();
+        console.log('Deleted folder marker');
+      } catch (e) {
+        console.log('No folder marker found to delete');
+      }
+      
+      // Delete all contents
+      let deletedCount = 0;
       for await (const blob of containerClient.listBlobsFlat({
         prefix: `${blobName}/`
       })) {
         await containerClient.getBlockBlobClient(blob.name).delete();
+        deletedCount++;
+      }
+      console.log(`Deleted ${deletedCount} items from directory`);
+      
+      // Delete the folder itself if it exists as a blob
+      try {
+        const folderBlobClient = containerClient.getBlockBlobClient(blobName);
+        await folderBlobClient.delete();
+        console.log('Deleted folder blob');
+      } catch (e) {
+        console.log('No folder blob to delete');
       }
     } else {
+      console.log('Deleting single file:', blobName);
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
       await blockBlobClient.delete();
     }
 
-    // Clear the cache for the parent directory
-    const parentPath = blobName.split('/').slice(0, -1).join('/');
-    const cacheKey = `files:${parentPath || 'root'}`;
-    cache.del(cacheKey);
-    
-    // Also clear cache for the current directory if it's a folder
-    if (isDirectory) {
-      const currentDirCacheKey = `files:${blobName}`;
-      cache.del(currentDirCacheKey);
+    // Double check that everything is deleted by trying to list the contents
+    const checkIterator = containerClient.listBlobsFlat({
+      prefix: blobName
+    });
+    let stillExists = false;
+    for await (const _ of checkIterator) {
+      stillExists = true;
+      break;
     }
     
-    res.status(200).json({ message: 'Item deleted successfully' });
+    if (stillExists) {
+      console.warn('Warning: Some content still exists after deletion');
+    } else {
+      console.log('Verified deletion - no remaining content');
+    }
+    
+    // Clear caches again after deletion
+    cache.del(parentCacheKey);
+    cache.del(currentCacheKey);
+    
+    res.status(200).json({ 
+      message: 'Item deleted successfully',
+      path: blobName,
+      isDirectory: isDirectory
+    });
   } catch (error) {
     console.error('Delete error:', error);
     res.status(500).json({ message: 'Failed to delete item' });
