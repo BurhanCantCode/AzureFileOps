@@ -187,30 +187,18 @@ class BlobService {
 
   async listFiles(prefix = '') {
     const files = new Map();
+    const folders = new Set();
     
     try {
       console.log('Listing files with prefix:', prefix);
       
-      // Normalize root path handling
-      const normalizedPrefix = prefix === '/' || prefix === '' 
-        ? '' 
-        : prefix.split('/').filter(Boolean).join('/');
-        
+      // Special handling for root path
+      const normalizedPrefix = prefix === '/' ? '' : prefix.split('/').filter(Boolean).join('/');
       const options = {
         prefix: normalizedPrefix ? `${normalizedPrefix}/` : '',
       };
 
-      console.log('Using normalized options:', { 
-        originalPrefix: prefix,
-        normalizedPrefix,
-        optionsPrefix: options.prefix 
-      });
-
-      // Validate container exists
-      const containerExists = await containerClient.exists();
-      if (!containerExists) {
-        throw new Error('Storage container not found');
-      }
+      console.log('Using options:', options);
 
       // First pass: collect all blobs
       const allBlobs = new Set();
@@ -299,12 +287,10 @@ class BlobService {
       const result = [...folderMarkers.values()].map(f => f.entry)
         .concat([...files.values()]);
 
-      console.log('Returning files:', result);
       return result;
-
     } catch (error) {
-      console.error('Blob service list operation failed:', error);
-      throw error; // Re-throw to be handled by controller
+      console.error('List operation failed:', error);
+      throw new Error(`Failed to list files: ${error.message}`);
     }
   }
 

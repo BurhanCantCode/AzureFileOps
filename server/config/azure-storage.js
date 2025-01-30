@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { BlobServiceClient, StorageSharedKeyCredential } = require('@azure/storage-blob');
 
 function parseConnectionString(connectionString) {
@@ -24,15 +25,19 @@ function createBlobServiceClient() {
     throw new Error('Invalid storage credentials. Both AccountName and AccountKey are required.');
   }
 
+  // Create a SharedKeyCredential
   const sharedKeyCredential = new StorageSharedKeyCredential(
     config.AccountName,
     config.AccountKey
   );
 
-  return new BlobServiceClient(
+  // Create the BlobServiceClient
+  const blobServiceClient = new BlobServiceClient(
     `https://${config.AccountName}.blob.core.windows.net`,
     sharedKeyCredential
   );
+
+  return blobServiceClient;
 }
 
 let blobServiceClient;
@@ -77,7 +82,7 @@ async function initializeContainer() {
     if (!exists) {
       console.log('Container does not exist, creating...');
       const createContainerResponse = await containerClient.create({
-        access: 'blob'
+        access: 'blob' // Allow public access to blobs only
       });
       console.log('Container created successfully:', createContainerResponse.requestId);
     } else {
@@ -89,6 +94,7 @@ async function initializeContainer() {
   }
 }
 
+// Initialize on startup
 initializeContainer().catch(error => {
   console.error('Container initialization failed:', error);
   process.exit(1);

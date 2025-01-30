@@ -28,7 +28,11 @@ import {
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
 import { formatBytes } from '../../utils/formatters';
-import { listFiles, deleteFile, createFolder, uploadFile } from '../../services/api';
+import {
+  listFiles,
+  deleteFile,
+  createFolder
+} from '../../services/api';
 
 const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
   const [files, setFiles] = useState([]);
@@ -44,8 +48,11 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
   const fetchFiles = useCallback(async () => {
     try {
       setIsLoading(true);
+      console.log('Fetching files for path:', currentPath);
       const response = await listFiles(currentPath);
-      setFiles(Array.isArray(response?.data) ? response.data : []);
+      console.log('Raw response:', response);
+      console.log('Response data:', response.data);
+      setFiles(response.data || []);
       setError(null);
     } catch (err) {
       console.error('Error fetching files:', err);
@@ -121,6 +128,7 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
   };
 
   const filteredFiles = useMemo(() => {
+    console.log('Filtering files:', { files, searchQuery }); // Debug log
     if (!searchQuery) return files;
     return files.filter(file => 
       file.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -230,6 +238,7 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
                           setItemToDelete(item);
                           setDeleteConfirmOpen(true);
                         }}
+                        disabled={isDeleting}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -299,6 +308,7 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
               setDeleteConfirmOpen(false);
               setItemToDelete(null);
             }}
+            disabled={isDeleting}
           >
             Cancel
           </Button>
@@ -306,8 +316,9 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
             onClick={() => handleDelete(itemToDelete)}
             variant="contained"
             color="error"
+            disabled={isDeleting}
           >
-            Delete
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

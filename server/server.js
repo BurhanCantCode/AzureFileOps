@@ -12,7 +12,6 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const MAX_PORT_ATTEMPTS = 10;  // Limit port attempts
 
 // Middleware
 app.use(cors());
@@ -109,40 +108,25 @@ const startupTimeout = setTimeout(() => {
   process.exit(1);
 }, 180000);
 
-const startServer = (port) => {
-  return new Promise((resolve, reject) => {
-    const server = app.listen(port)
-      .on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-          console.log(`Port ${port} is busy, trying ${port + 1}`);
-          if (port - PORT >= MAX_PORT_ATTEMPTS) {
-            reject(new Error('No available ports found'));
-            return;
-          }
-          // Try next port recursively
-          resolve(startServer(port + 1));
-        } else {
-          reject(err);
-        }
-      })
-      .on('listening', () => {
-        const addr = server.address();
-        console.log(`Server listening on ${addr.address}:${addr.port}`);
-        if (startupTimeout) {
-          clearTimeout(startupTimeout);
-        }
-        resolve(server);
-      });
+const server = app.listen(PORT)
+  .on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${PORT} is busy, trying ${PORT + 1}`);
+      // Try next port
+      server.listen(PORT + 1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  })
+  .on('listening', () => {
+    const addr = server.address();
+    console.log(`Server listening on ${addr.address}:${addr.port}`);
+    // Clear startup timeout since server started successfully
+    if (startupTimeout) {
+      clearTimeout(startupTimeout);
+    }
   });
-};
-
-// Start server with error handling
-try {
-  await startServer(PORT);
-} catch (err) {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-}
 
 // Add graceful shutdown
 process.on('SIGTERM', () => {

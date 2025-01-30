@@ -39,21 +39,9 @@ export const uploadFile = async (file, path = '', onProgress) => {
 export const listFiles = async (path = '') => {
   try {
     const response = await api.get('/', {
-      params: { path },
-      transformResponse: [
-        (data) => {
-          // Handle both wrapped and unwrapped responses
-          try {
-            const parsed = JSON.parse(data);
-            return Array.isArray(parsed) ? { data: parsed } : parsed;
-          } catch {
-            return { data: [] };
-          }
-        }
-      ]
+      params: { path }
     });
-    
-    console.log('Processed response:', response.data);
+    console.log('API Response:', response.data);
     return response.data;
   } catch (error) {
     console.error('List files error:', error);
