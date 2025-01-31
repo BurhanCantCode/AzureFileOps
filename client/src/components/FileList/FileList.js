@@ -23,7 +23,6 @@ import {
 import {
   ArrowBack as ArrowBackIcon,
   CreateNewFolder as CreateNewFolderIcon,
-  Delete as DeleteIcon,
   Folder as FolderIcon,
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
@@ -40,9 +39,6 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
   const [error, setError] = useState(null);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchFiles = useCallback(async () => {
@@ -88,30 +84,6 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
     } catch (err) {
       console.error('Error creating folder:', err);
       setError(err.message || 'Failed to create folder');
-    }
-  };
-
-  const handleDelete = async (item) => {
-    try {
-      setIsDeleting(true);
-      console.log('Deleting item:', item);
-      
-      await deleteFile(item.path);
-      setDeleteConfirmOpen(false);
-      setItemToDelete(null);
-      
-      // Force immediate refresh
-      await fetchFiles();
-      
-      // Double-check refresh after a short delay
-      setTimeout(async () => {
-        await fetchFiles();
-      }, 1000);
-    } catch (err) {
-      console.error('Error deleting item:', err);
-      setError(`Failed to delete ${item.isDirectory ? 'folder' : 'file'}`);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -205,7 +177,6 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
                 <TableRow>
                   <TableCell>Name</TableCell>
                   <TableCell align="right">Size</TableCell>
-                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -237,19 +208,6 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
                     </TableCell>
                     <TableCell align="right">
                       {item.size ? formatBytes(item.size) : '-'}
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setItemToDelete(item);
-                          setDeleteConfirmOpen(true);
-                        }}
-                        disabled={isDeleting}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -286,47 +244,6 @@ const FileList = ({ refreshTrigger, currentPath, onPathChange }) => {
           <Button onClick={() => setCreateFolderOpen(false)}>Cancel</Button>
           <Button onClick={handleCreateFolder} variant="contained">
             Create
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteConfirmOpen}
-        onClose={() => {
-          setDeleteConfirmOpen(false);
-          setItemToDelete(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete {itemToDelete?.isDirectory ? 'folder' : 'file'}{' '}
-            "{itemToDelete?.name}"?
-            {itemToDelete?.isDirectory && (
-              <strong> This will also delete all contents inside the folder.</strong>
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setDeleteConfirmOpen(false);
-              setItemToDelete(null);
-            }}
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => handleDelete(itemToDelete)}
-            variant="contained"
-            color="error"
-            disabled={isDeleting}
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
